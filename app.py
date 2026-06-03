@@ -34,19 +34,24 @@ st.sidebar.markdown("- **Nguyễn Thị Nhã Phương**")
 DATA_FOLDER = "VN30"
 
 def clean_ticker_name(filename):
-    # Loại bỏ đuôi .csv và khoảng trắng thừa hai đầu
-    name_without_ext = filename.replace(".csv", "").strip()
+    # Loại bỏ đuôi .csv và đưa về chữ viết hoa để dễ xử lý
+    name_clean = filename.upper().replace(".CSV", "").strip()
     
-    # Tách các từ trong tên file ra dựa vào khoảng trắng
-    words = name_without_ext.split()
-    
+    # Nếu trong tên file có chứa cụm từ VN30 (bất kể khoảng trắng) thì ép về "VN30"
+    if "VN30" in name_clean or "VN 30" in name_clean:
+        return "VN30"
+        
+    # Ngược lại, tách các từ ra để lấy mã cổ phiếu (FPT, VCB, ACB...)
+    words = name_clean.split()
     if words:
-        # Lấy từ cuối cùng trong tên file (chính là mã cổ phiếu như FPT, VCB, VN30...)
         ticker = words[-1].strip()
+        # Nếu từ cuối cùng bị tách ra thành số "30", quay ngược lại lấy từ sát cuối
+        if ticker == "30" and len(words) > 1:
+            return "VN30"
         return ticker
-    return name_without_ext
+    return name_clean
 
-@st.cache_data(ttl=60)
+@st.cache_data
 def load_raw_data(folder):
     file_list = glob.glob(os.path.join(folder, "*.csv"))
     if not file_list:
@@ -57,23 +62,28 @@ def load_raw_data(folder):
         filename = os.path.basename(file_path)
         ticker = clean_ticker_name(filename)
         
-        # ĐỌC FILE BẰNG UTF-8 VÀ LẤY THEO VỊ TRÍ CỘT (Khắc phục hoàn toàn lỗi font chữ hệ thống)
+        # Đọc file bằng encoding an toàn để tránh lỗi font trên Linux
         try:
             df_raw = pd.read_csv(file_path, encoding='utf-8')
+            if df_raw.shape[1] < 2:
+                raise ValueError
         except:
-            df_raw = pd.read_csv(file_path, encoding='utf-8-sig') # Phòng hờ file có BOM
+            try:
+                df_raw = pd.read_csv(file_path, encoding='utf-8-sig')
+            except:
+                df_raw = pd.read_csv(file_path, encoding='latin1')
             
-        # Lấy cột 0 (Ngày) và cột 1 (Giá phối/Lần cuối) dựa theo chỉ số vị trí, không quan tâm tên chữ
+        # Lấy theo vị trí cột (Cột 0 là Ngày, Cột 1 là Giá)
         df_temp = df_raw.iloc[:, [0, 1]].copy()
         df_temp.columns = ['Date', ticker]
         
-        # Ép định dạng Ngày/Tháng/Năm chuẩn xác
+        # Ép định dạng ngày chuẩn xác %d/%m/%Y
         df_temp['Date'] = pd.to_datetime(df_temp['Date'], format='%d/%m/%Y', errors='coerce')
         
         # Làm sạch giá tiền
         if df_temp[ticker].dtype == 'object':
-            df_temp[ticker] = df_temp[ticker].astype(str).str.replace(',', '')
-            df_temp[ticker] = df_temp[ticker].str.replace('%', '') 
+            df_temp[ticker] = df_temp[ticker].astype(str).str.replace(',', '', regex=False)
+            df_temp[ticker] = df_temp[ticker].str.replace('%', '', regex=False) 
             df_temp[ticker] = df_temp[ticker].str.strip() 
             
         df_temp[ticker] = pd.to_numeric(df_temp[ticker], errors='coerce')
@@ -84,13 +94,9 @@ def load_raw_data(folder):
             df_merged = pd.merge(df_merged, df_temp, on='Date', how='outer')
             
     if df_merged is not None:
-        # Loại bỏ dòng lỗi nếu có
         df_merged = df_merged.dropna(subset=['Date'])
         df_merged = df_merged.sort_values('Date').set_index('Date')
-        
-        # Đảm bảo index ngày tháng không bị dính múi giờ tự động
         df_merged.index = pd.to_datetime(df_merged.index).tz_localize(None)
-        
         df_merged = df_merged.astype(float)
         df_merged = df_merged.ffill().bfill()
         
@@ -98,17 +104,6 @@ def load_raw_data(folder):
 
 # Tải dữ liệu thô
 df_prices = load_raw_data(DATA_FOLDER)
-
-# --- ĐOẠN CODE KIỂM TRA LỖI TRỰC TIẾP (BỎ SAU KHI SỬA XONG) ---
-st.write("### 🔍 KIỂM TRA HỆ THỐNG TRÊN WEB:")
-if df_prices is None:
-    st.error("Trạng thái: Không tìm thấy thư mục hoặc thư mục trống không!")
-else:
-    st.success(f"Trạng thái: Đọc được file thành công! Số dòng thô: {len(df_prices)}, Số cột: {len(df_prices.columns)}")
-    st.write("Danh sách cột đọc được từ file:", list(df_prices.columns))
-    st.write("Kiểu dữ liệu của Index Ngày Tháng:", type(df_prices.index))
-    st.write("Ngày bắt đầu thô:", df_prices.index.min(), " | Ngày kết thúc thô:", df_prices.index.max())
-# -------------------------------------------------------------
 
 if df_prices is None:
     st.error(f"⚠️ Không tìm thấy dữ liệu CSV tại thư mục: '{DATA_FOLDER}'. Hãy đảm bảo thư mục này nằm ngang hàng với file app.py.")
@@ -128,27 +123,40 @@ else:
     steps_qr = st.sidebar.slider("Số vòng lặp thuật toán QR", 100, 1500, 500, step=100)
     target_var = st.sidebar.slider("Ngưỡng phương sai giải thích tích lũy (%)", 50, 95, 90, step=5) / 100.0
 
-    # SỬA CHỖ NÀY: Ép biến ngày từ Sidebar về chuẩn Timestamp để Linux lọc không bị rỗng
+    # Lọc dữ liệu theo ngày đã chọn từ Sidebar
     t_start = pd.Timestamp(start_date)
     t_end = pd.Timestamp(end_date)
     df_filtered_prices = df_prices.loc[t_start:t_end]
 
-    # Chỉ giữ lại các cột thực sự là kiểu số (float/int) để tính toán
+    # Chỉ giữ lại các cột chứa dữ liệu số
     df_filtered_prices = df_filtered_prices.select_dtypes(include=[np.number])
 
-    # Tính toán tỷ suất sinh lợi Logarit hằng ngày từ dữ liệu đã lọc
-    df_returns = np.log(df_filtered_prices / df_filtered_prices.shift(1)).dropna()
+    # Sắp xếp theo ngày tăng dần để tính Log Returns chính xác
+    df_filtered_prices = df_filtered_prices.sort_index(ascending=True)
+
+    # Tính toán tỷ suất sinh lợi Logarit
+    df_returns = np.log(df_filtered_prices / df_filtered_prices.shift(1))
+    df_returns = df_returns.iloc[1:]
+    df_returns = df_returns.replace([np.inf, -np.inf], np.nan).fillna(0)
     
     # 3. TOÁN PCA FROM SCRATCH 
-    stocks_returns = df_returns.drop(columns=['VN30'], errors='ignore')
+    # BƯỚC SỬA: Loại bỏ VN30 (hoặc cột lỗi tên "30") một cách an toàn
+    stock_cols = [col for col in df_returns.columns if 'vn30' not in col.lower() and col != "30"]
+    stocks_returns = df_returns[stock_cols].copy()
+    
     X = stocks_returns.values
     features = stocks_returns.columns
 
-    # Chuẩn hóa Z-score
-    X_scaled = (X - np.mean(X, axis=0)) / np.std(X, axis=0)
+    # Chuẩn hóa Z-score an toàn
+    X_mean = np.mean(X, axis=0)
+    X_std = np.std(X, axis=0)
+    X_std[X_std == 0] = 1.0  
+    X_scaled = (X - X_mean) / X_std
+    
+    # Tính ma trận hiệp phương sai
     cov_matrix = (X_scaled.T @ X_scaled) / (X_scaled.shape[0] - 1)
 
-    # Thuật toán QR Phân rã trị riêng tự dựng
+    # Thuật toán QR tự dựng
     A_k = cov_matrix.copy()
     V = np.eye(cov_matrix.shape[0])
     for _ in range(steps_qr):
@@ -164,7 +172,6 @@ else:
     explained_variance_ratio = eigenvalues / np.sum(eigenvalues)
     cumulative_variance = np.cumsum(explained_variance_ratio)
 
-    # MẢNG MÀU HEX ĐỐI LẬP CHUẨN (Xanh dương - Trắng - Đỏ) KHÔNG DÙNG TÊN CHUỖI CỦA PLOTLY
     DIVERGING_HEX_SCALE = [[0.0, '#005f73'], [0.3, '#94d2bd'], [0.5, '#e9d8a6'], [0.7, '#ee9b00'], [1.0, '#ae2012']]
 
     # 4. THIẾT KẾ CÁC TABS DASHBOARD
@@ -200,7 +207,6 @@ else:
             color_continuous_scale=DIVERGING_HEX_SCALE, 
             labels=dict(color="Hệ số tương quan")
         )
-        # CHỖ NÀY: Đảm bảo thụt lề bằng đúng với dòng fig_heat phía trên
         fig_heat.update_layout(
             height=700, 
             margin=dict(l=20, r=20, t=20, b=20),
@@ -253,7 +259,6 @@ else:
     with tab4:
         st.markdown("### 🎯 Dự Phóng Nhân Tố PC1 & PC2 so với VN30 Thực tế")
         
-        # Tích hợp toán cho cả PC1 và PC2
         pc1_eigenvector = eigenvectors[:, 0]
         pc2_eigenvector = eigenvectors[:, 1]
         
@@ -264,30 +269,32 @@ else:
         df_analysis['PC1_Returns'] = pc1_returns
         df_analysis['PC2_Returns'] = pc2_returns
         
-        if 'VN30' in df_returns.columns:
-            df_analysis['VN30_Returns'] = df_returns['VN30'].values
-        else:
-            df_analysis['VN30_Returns'] = df_returns.mean(axis=1).values
+        # BƯỚC SỬA: Tìm kiếm cột chỉ số tổng an toàn hơn
+        has_vn30 = False
+        for col in df_returns.columns:
+            if 'vn30' in col.lower() or col == "30":
+                df_analysis['VN30_Returns'] = df_returns[col].values
+                has_vn30 = True
+                break
+                
+        if not has_vn30:
+            df_analysis['VN30_Returns'] = stocks_returns.mean(axis=1).values
 
-        # Khắc phục Sign Ambiguity cho PC1 nhằm bám sát đồ thị gốc
         correlation_pc1 = df_analysis['PC1_Returns'].corr(df_analysis['VN30_Returns'])
         if correlation_pc1 < 0:
             df_analysis['PC1_Returns'] = -df_analysis['PC1_Returns']
             pc1_eigenvector = -pc1_eigenvector
             correlation_pc1 = -correlation_pc1
 
-        # Điều chỉnh lại biên độ dao động (Volatility Rescaling) về chuẩn VN30
         vn30_std = df_analysis['VN30_Returns'].std()
         df_analysis['PC1_Adjusted'] = df_analysis['PC1_Returns'] * (vn30_std / df_analysis['PC1_Returns'].std())
         df_analysis['PC2_Adjusted'] = df_analysis['PC2_Returns'] * (vn30_std / df_analysis['PC2_Returns'].std())
 
-        # Tính toán Lợi suất lũy kế tích lũy sinh lợi (Cumulative Returns)
         df_cum = pd.DataFrame(index=df_analysis.index)
         df_cum['VN30 Index (Thực tế)'] = np.exp(df_analysis['VN30_Returns'].cumsum()) - 1
         df_cum['PC1 Index (Nhân tố Thị trường)'] = np.exp(df_analysis['PC1_Adjusted'].cumsum()) - 1
         df_cum['PC2 Index (Nhân tố Phân hóa ngành)'] = np.exp(df_analysis['PC2_Adjusted'].cumsum()) - 1
 
-        # ---- ĐỒ THỊ 1: CHUỖI ĐƯỜNG LŨY KẾ ĐA NHÂN TỐ ----
         fig_line = go.Figure()
         fig_line.add_trace(go.Scatter(x=df_cum.index, y=df_cum['VN30 Index (Thực tế)'], mode='lines', name='VN30 Index (Thực tế)', line=dict(color='#2B2D42', width=2.5)))
         fig_line.add_trace(go.Scatter(x=df_cum.index, y=df_cum['PC1 Index (Nhân tố Thị trường)'], mode='lines', name='PC1 Index (Xu hướng)', line=dict(color='#EF233C', width=2, dash='dash')))
@@ -302,7 +309,6 @@ else:
         )
         st.plotly_chart(fig_line, use_container_width=True)
         
-        # Khu vực chỉ số tương quan cặp song hành
         m1, m2 = st.columns(2)
         with m1:
             st.metric(label="Hệ số tương quan Hệ thống (PC1 vs VN30 Real):", value=f"{correlation_pc1:.4f}")
@@ -310,9 +316,7 @@ else:
             correlation_pc2 = df_analysis['PC2_Returns'].corr(df_analysis['VN30_Returns'])
             st.metric(label="Hệ số tương quan Trực giao (PC2 vs VN30 Real):", value=f"{correlation_pc2:.4f}", delta="Tính chất độc lập dòng tiền")
 
-        # ---- ĐỒ THỊ 2: TRỌNG SỐ PHÂN BỔ NHÓM NGÀNH ĐỐI LẬP (PC2 LOADINGS) ----
         st.markdown("#### 📊 Phân tách cấu trúc Trọng số (Loadings) của Thành phần chính PC2")
-        st.markdown("Biểu đồ thể hiện sự đối lập giữa các nhóm cổ phiếu tạo nên lực đẩy phân hóa cho nhân tố PC2.")
         
         df_loadings_pc2 = pd.DataFrame({
             "Mã Cổ Phiếu": features,
@@ -332,13 +336,13 @@ else:
         )
         st.plotly_chart(fig_bar_pc2, use_container_width=True)
         
-        # Khối kết luận biện luận mở rộng tích hợp PC1 & PC2 (Bản nâng cấp thực tế cho HUB)
+        # Khối kết luận biện luận
         st.markdown("""
         <div class="card" style="line-height: 1.8; text-align: justify; padding: 20px; border-radius: 12px; background-color: #F8FAFC; border-left: 6px solid #1E3A8A;">
         <h4 style="color: #1E3A8A; margin-top: 0; font-size: 20px; font-weight: 700; border-bottom: 2px solid #E2E8F0; padding-bottom: 10px;">💡 ĐÁNH GIÁ VÀ BÀI HỌC KINH TẾ TỪ MÔ HÌNH PCA (GÓC NHÌN ĐẦU TƯ THỰC TẾ)</h4>
         
         <p><strong>1. Nhìn từ PC1: Đầu tư ở Việt Nam, xu hướng chung quyết định tất cả</strong><br>
-        Nhìn vào con số tương quan lên tới <strong>91.92%</strong> giữa đường PC1 và chỉ số VN30 thực tế, ta thấy một sự thật là: Ở thị trường chứng khoán Việt Nam, xu hướng chung của thị trường (bản chất là dòng tiền lớn, lãi suất, vĩ mô) quyết định đến hơn 90% sự tăng giảm của cổ phiếu. Khi thị trường vào sóng tăng hoặc sụt giảm, tâm lý bầy đàn xuất hiện và kéo gần như tất cả các mã đi chung một hướng. Đối với người quản trị danh mục, con số này là một lời cảnh báo: Khi thị trường chung sập, việc bạn đa dạng hóa danh mục bằng cách mua nhiều mã khác nhau trong rổ VN30 gần như vô tác dụng, vì lúc đó rủi ro hệ thống đã bao trùm toàn bộ.</p>
+        Nhìn vào con số tương quan cao giữa đường PC1 và chỉ số VN30 thực tế, ta thấy một sự thật là: Ở thị trường chứng khoán Việt Nam, xu hướng chung của thị trường (bản chất là dòng tiền lớn, lãi suất, vĩ mô) quyết định đến hơn 90% sự tăng giảm của cổ phiếu. Khi thị trường vào sóng tăng hoặc sụt giảm, tâm lý bầy đàn xuất hiện và kéo gần như tất cả các mã đi chung một hướng. Đối với người quản trị danh mục, con số này là một lời cảnh báo: Khi thị trường chung sập, việc bạn đa dạng hóa danh mục bằng cách mua nhiều mã khác nhau trong rổ VN30 gần như vô tác dụng, vì lúc đó rủi ro hệ thống đã bao trùm toàn bộ.</p>
         
         <p><strong>2. Nhìn từ PC2: Câu chuyện luân chuyển dòng tiền và "Cán cân ngành"</strong><br>
         Nếu như PC1 nói về xu hướng chung, thì PC2 lại vạch trần câu chuyện phân hóa ngành và cuộc chơi luân chuyển dòng tiền của các mập. Biểu đồ trọng số (Loadings) của PC2 đã chia rổ VN30 thành hai chiến tuyến đối lập rất rõ ràng:
@@ -349,7 +353,6 @@ else:
         Nhìn vào đường đồ thị PC2, giai đoạn giữa năm 2025 nó cắm đầu đi xuống vì dòng tiền lúc đó chê nhóm bất động sản và bank tư nhân để chạy sang trú ẩn ở nhóm năng lượng, sản xuất (Phía Dương thắng thế). Ngược lại, từ cuối năm 2025 đến đầu năm 2026, đường PC2 lại dựng đứng lên. Điều này chứng minh dòng tiền đầu cơ đã quay xe, rút mạnh khỏi nhóm phòng thủ để lao vào đánh sóng hồi của bất động sản và tài chính tư nhân (Phía Âm bùng nổ). Bản chất của PC2 chính là thước đo xem dòng tiền thông minh đang chảy vào túi ngành nào.</p>
         
         <p><strong>3. Ứng dụng thực tế để thiết kế danh mục đầu tư</strong><br>
-        Từ thuật toán PCA tự dựng này, chúng ta rút ra một mẹo xương máu khi làm danh mục đầu tư: Đừng bao giờ mua hai cổ phiếu nằm cùng một phía của PC2 (ví dụ đã mua <code>VHM</code> lại còn mua thêm <code>TCB</code>, hoặc đã ôm <code>GAS</code> lại mua thêm <code>PLX</code>). Vì khi dòng tiền rút khỏi nhóm đó, danh mục của bạn sẽ bị vạ lây cả đôi. Cách đi tiền khôn ngoan là bắt cặp chéo giữa một mã phía Dương (như <code>VCB</code> hoặc <code>GAS</code>) with một mã phía Âm (như <code>TCB</code> hoặc <code>VHM</code>). Sự bù trừ này giúp danh mục luôn có chỗ dựa vững chắc bất kể dòng tiền thị trường có xoay vòng thế nào đi chăng nữa.</p>
+        Từ thuật toán PCA tự dựng này, chúng ta rút ra một mẹo xương máu khi làm danh mục đầu tư: Đừng bao giờ mua hai cổ phiếu nằm cùng một phía của PC2 (ví dụ đã mua <code>VHM</code> lại còn mua thêm <code>TCB</code>, hoặc đã ôm <code>GAS</code> lại mua thêm <code>PLX</code>). Vì khi dòng tiền rút khỏi nhóm đó, danh mục của bạn sẽ bị vạ lây cả đôi. Cách đi tiền khôn ngoan là bắt cặp chéo giữa một mã phía Dương (như <code>VCB</code> hoặc <code>GAS</code>) với một mã phía Âm (như <code>TCB</code> hoặc <code>VHM</code>). Sự bù trừ này giúp danh mục luôn có chỗ dựa vững chắc bất kể dòng tiền thị trường có xoay vòng thế nào đi chăng nữa.</p>
         </div>
         """, unsafe_allow_html=True)
-    
