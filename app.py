@@ -91,15 +91,17 @@ def load_raw_data(folder):
         df_temp = df_raw[[date_col, price_col]].copy()
         df_temp.columns = ['Date', ticker]
         
-        # Ép định dạng ngày chuẩn xác %d/%m/%Y
+       # Ép định dạng ngày chuẩn xác %d/%m/%Y
         df_temp['Date'] = pd.to_datetime(df_temp['Date'], format='%d/%m/%Y', errors='coerce')
         
-        # Làm sạch giá tiền (Xóa bỏ dấu phẩy phân cách hàng nghìn nếu có)
-        if df_temp[ticker].dtype == 'object':
-            df_temp[ticker] = df_temp[ticker].astype(str).str.replace(',', '', regex=False)
-            df_temp[ticker] = df_temp[ticker].str.replace('%', '', regex=False) 
-            df_temp[ticker] = df_temp[ticker].str.strip() 
-            
+        # SỬA CHỖ NÀY: XỬ LÝ GIÁ TIỀN "BẤT TỬ" - CHẤP CẢ DẤU PHẨY CỦA VN30
+        # Ép toàn bộ về kiểu chuỗi trước để dùng hàm xóa dấu phẩy hàng ngàn
+        df_temp[ticker] = df_temp[ticker].astype(str).str.replace(',', '', regex=False)
+        df_temp[ticker] = df_temp[ticker].str.replace('%', '', regex=False) 
+        df_temp[ticker] = df_temp[ticker].str.strip() 
+        
+        # Sau khi sạch sẽ dấu phẩy mới ép về kiểu số thực
+        df_temp[ticker] = pd.to_numeric(df_temp[ticker], errors='coerce')
         df_temp[ticker] = pd.to_numeric(df_temp[ticker], errors='coerce')
             
         if df_merged is None:
