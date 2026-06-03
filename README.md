@@ -3,7 +3,7 @@
 An unsupervised machine learning and quantitative finance project designed to extract hidden market factors, analyze systemic risk, and track smart money sector rotation within the Vietnamese Stock Market (VN30 Index) using a Principal Component Analysis (PCA) model built completely from scratch.
 
 ## 🌐 Live Dashboard Application
-* **Streamlit Cloud Web App:** [https://vn30project.streamlit.app/]((https://vn30-pca.streamlit.app/))
+* **Streamlit Cloud Web App:** <https://vn30-pca.streamlit.app/>
 ---
 
 ## 📑 1. Tổng Quan Dữ Liệu Nguồn (Data Specifications)
