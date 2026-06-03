@@ -49,12 +49,17 @@ def load_raw_data(folder):
         filename = os.path.basename(file_path)
         ticker = clean_ticker_name(filename)
         
-        # Đọc dữ liệu gốc
-        df_temp = pd.read_csv(file_path)[['Ngày', 'Lần cuối']].copy()
+        # ĐỌC FILE BẰNG UTF-8 VÀ LẤY THEO VỊ TRÍ CỘT (Khắc phục hoàn toàn lỗi font chữ hệ thống)
+        try:
+            df_raw = pd.read_csv(file_path, encoding='utf-8')
+        except:
+            df_raw = pd.read_csv(file_path, encoding='utf-8-sig') # Phòng hờ file có BOM
+            
+        # Lấy cột 0 (Ngày) và cột 1 (Giá phối/Lần cuối) dựa theo chỉ số vị trí, không quan tâm tên chữ
+        df_temp = df_raw.iloc[:, [0, 1]].copy()
         df_temp.columns = ['Date', ticker]
         
-        # SỬA CHÍNH XÁC Ở ĐÂY: Khóa chặt định dạng Ngày/Tháng/Năm ( %d/%m/%Y )
-        # Nếu file CSV của bạn lưu dạng 29/04/2025 thì format này sẽ ép cả Local và Web đều phải hiểu đúng 100%
+        # Ép định dạng Ngày/Tháng/Năm chuẩn xác
         df_temp['Date'] = pd.to_datetime(df_temp['Date'], format='%d/%m/%Y', errors='coerce')
         
         # Làm sạch giá tiền
@@ -71,7 +76,7 @@ def load_raw_data(folder):
             df_merged = pd.merge(df_merged, df_temp, on='Date', how='outer')
             
     if df_merged is not None:
-        # Loại bỏ các dòng lỗi ngày nếu có
+        # Loại bỏ dòng lỗi nếu có
         df_merged = df_merged.dropna(subset=['Date'])
         df_merged = df_merged.sort_values('Date').set_index('Date')
         
