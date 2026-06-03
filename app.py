@@ -290,11 +290,24 @@ else:
         )
         st.plotly_chart(fig_bar_pc2, use_container_width=True)
         
-        # Khối kết luận biện luận mở rộng tích hợp PC1 & PC2
+        
+        # Khối kết luận biện luận mở rộng tích hợp PC1 & PC2 (Bản nâng cấp thực tế cho HUB)
         st.markdown("""
-        <div class="card">
-        <strong>💡 Kết luận:</strong><br>
-        1. <strong>Sức mạnh của PC1 (Market Driver):</strong> Tương quan xấp xỉ 92% chứng minh cấu trúc rổ VN30 bị chi phối nặng nề bởi tính rủi ro hệ thống toàn thị trường. Khi nhân tố vĩ mô tốt, toàn bộ các cổ phiếu có trọng số PC1 đồng thuận kéo chỉ số đi lên.<br>
-        2. <strong>Bản chất dịch chuyển dòng tiền ở PC2 (Sector Rotation):</strong> Biểu đồ cột Loadings của PC2 bộc lộ rõ nét trạng thái "cán cân". Một đầu cực dương là nhóm cổ phiếu Năng lượng/Tiêu dùng lớn (như GAS, PLX, GVR, VNM), đầu cực âm đối trọng lại chính là nhóm Bất động sản thương mại (họ Vin gồm VHM, VIC, VRE) kết hợp cùng một vài mã Ngân hàng tư nhân. Sự đổi màu đột ngột trên đường đồ thị PC2 giai đoạn cuối năm 2025 - đầu năm 2026 chính là minh chứng thực tế cho việc dòng tiền rút từ nhóm cổ phiếu chu kỳ này để quay vòng sang nhóm phòng thủ chu kỳ khác.
+        <div class="card" style="line-height: 1.8; text-align: justify; padding: 20px; border-radius: 12px; background-color: #F8FAFC; border-left: 6px solid #1E3A8A;">
+        <h4 style="color: #1E3A8A; margin-top: 0; font-size: 20px; font-weight: 700; border-bottom: 2px solid #E2E8F0; padding-bottom: 10px;">💡 ĐÁNH GIÁ VÀ BÀI HỌC KINH TẾ TỪ MÔ HÌNH PCA (GÓC NHÌN ĐẦU TƯ THỰC TẾ)</h4>
+        
+        <p><strong>1. Nhìn từ PC1: Đầu tư ở Việt Nam, xu hướng chung quyết định tất cả</strong><br>
+        Nhìn vào con số tương quan lên tới <strong>91.92%</strong> giữa đường PC1 và chỉ số VN30 thực tế, ta thấy một sự thật là: Ở thị trường chứng khoán Việt Nam, xu hướng chung của thị trường (bản chất là dòng tiền lớn, lãi suất, vĩ mô) quyết định đến hơn 90% sự tăng giảm của cổ phiếu. Khi thị trường vào sóng tăng hoặc sụt giảm, tâm lý bầy đàn xuất hiện và kéo gần như tất cả các mã đi chung một hướng. Đối với người quản trị danh mục, con số này là một lời cảnh báo: Khi thị trường chung sập, việc bạn đa dạng hóa danh mục bằng cách mua nhiều mã khác nhau trong rổ VN30 gần như vô tác dụng, vì lúc đó rủi ro hệ thống đã bao trùm toàn bộ.</p>
+        
+        <p><strong>2. Nhìn từ PC2: Câu chuyện luân chuyển dòng tiền và "Cán cân ngành"</strong><br>
+        Nếu như PC1 nói về xu hướng chung, thì PC2 lại vạch trần câu chuyện phân hóa ngành và cuộc chơi luân chuyển dòng tiền của các mập. Biểu đồ trọng số (Loadings) của PC2 đã chia rổ VN30 thành hai chiến tuyến đối lập rất rõ ràng:
+        <ul>
+            <li><strong>Phía Dương (Nhóm phòng thủ, sản xuất, năng lượng):</strong> Gồm các ông lớn có dòng tiền mặt cực khỏe như <code>GAS</code>, <code>PLX</code>, <code>GVR</code>, <code>VNM</code> và hai bank quốc doanh trụ cột là <code>VCB</code>, <code>BID</code>.</li>
+            <li><strong>Phía Âm (Nhóm chu kỳ, bất động sản và bank tư nhân):</strong> Bị thống trị bởi họ nhà Vin (<code>VHM</code>, <code>VIC</code>, <code>VRE</code>) và các ngân hàng thương mại cổ phần tư nhân nhạy cảm với tín dụng như <code>TCB</code>, <code>HDB</code>.</li>
+        </ul>
+        Nhìn vào đường đồ thị PC2, giai đoạn giữa năm 2025 nó cắm đầu đi xuống vì dòng tiền lúc đó chê nhóm bất động sản và bank tư nhân để chạy sang trú ẩn ở nhóm năng lượng, sản xuất (Phía Dương thắng thế). Ngược lại, từ cuối năm 2025 đến đầu năm 2026, đường PC2 lại dựng đứng lên. Điều này chứng minh dòng tiền đầu cơ đã quay xe, rút mạnh khỏi nhóm phòng thủ để lao vào đánh sóng hồi của bất động sản và tài chính tư nhân (Phía Âm bùng nổ). Bản chất của PC2 chính là thước đo xem dòng tiền thông minh đang chảy vào túi ngành nào.</p>
+        
+        <p><strong>3. Ứng dụng thực tế để thiết kế danh mục đầu tư</strong><br>
+        Từ thuật toán PCA tự dựng này, chúng ta rút ra một mẹo xương máu khi làm danh mục đầu tư: Đừng bao giờ mua hai cổ phiếu nằm cùng một phía của PC2 (ví dụ đã mua <code>VHM</code> lại còn mua thêm <code>TCB</code>, hoặc đã ôm <code>GAS</code> lại mua thêm <code>PLX</code>). Vì khi dòng tiền rút khỏi nhóm đó, danh mục của bạn sẽ bị vạ lây cả đôi. Cách đi tiền khôn ngoan là bắt cặp chéo giữa một mã phía Dương (như <code>VCB</code> hoặc <code>GAS</code>) với một mã phía Âm (như <code>TCB</code> hoặc <code>VHM</code>). Sự bù trừ này giúp danh mục luôn có chỗ dựa vững chắc bất kể dòng tiền thị trường có xoay vòng thế nào đi chăng nữa.</p>
         </div>
         """, unsafe_allow_html=True)
