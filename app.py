@@ -23,7 +23,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<div class="main-title">📊 Ứng dụng Phân tích cấu trúc thị trường chứng khoán Việt Nam bằng thuật toán PCA from Scratch</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">📊 ỨNG DỤNG PHÂN TÍCH CẤU TRÚC THỊ TRƯỜNG CHỨNG KHOÁN VIỆT NAM BẰNG PCA FROM SCRATCH</div>', unsafe_allow_html=True)
 
 # Khối thông tin nhóm ở Sidebar
 st.sidebar.markdown("### 👥 NGƯỜI THỰC HIỆN")
@@ -47,20 +47,33 @@ def load_raw_data(folder):
         filename = os.path.basename(file_path)
         ticker = clean_ticker_name(filename)
         
+        # Đọc dữ liệu, ép cột Ngày về datetime luôn
         df_temp = pd.read_csv(file_path)[['Ngày', 'Lần cuối']].copy()
         df_temp.columns = ['Date', ticker]
         df_temp['Date'] = pd.to_datetime(df_temp['Date'], format='%d/%m/%Y')
+        
+        # CHỖ SỬA QUAN TRỌNG: Làm sạch và ép kiểu số tuyệt đối cho cột giá
         if df_temp[ticker].dtype == 'object':
-            df_temp[ticker] = df_temp[ticker].str.replace(',', '').astype(float)
+            df_temp[ticker] = df_temp[ticker].astype(str).str.replace(',', '')
+            df_temp[ticker] = df_temp[ticker].str.replace('%', '') # Xóa dấu % nếu có
+            df_temp[ticker] = df_temp[ticker].str.strip() # Xóa khoảng trắng thừa
+            
+        # Ép buộc chuyển sang dạng số, nếu có dòng lỗi chữ thì biến thành NaN
+        df_temp[ticker] = pd.to_numeric(df_temp[ticker], errors='coerce')
             
         if df_merged is None:
             df_merged = df_temp
         else:
             df_merged = pd.merge(df_merged, df_temp, on='Date', how='outer')
             
-    df_merged = df_merged.sort_values('Date').set_index('Date').ffill().bfill()
+    if df_merged is not None:
+        df_merged = df_merged.sort_values('Date').set_index('Date')
+        # Ép kiểu float cho toàn bộ dataframe để tránh lỗi PyArrow trên Cloud
+        df_merged = df_merged.astype(float)
+        # Điền dữ liệu trống bằng phương pháp ffill/bfill
+        df_merged = df_merged.ffill().bfill()
+        
     return df_merged
-
 # Tải dữ liệu thô
 df_prices = load_raw_data(DATA_FOLDER)
 
@@ -82,10 +95,14 @@ else:
     steps_qr = st.sidebar.slider("Số vòng lặp thuật toán QR", 100, 1500, 500, step=100)
     target_var = st.sidebar.slider("Ngưỡng phương sai giải thích tích lũy (%)", 50, 95, 90, step=5) / 100.0
 
-    # Lọc dữ liệu theo ngày
+   # Lọc dữ liệu theo ngày đã chọn
     df_filtered_prices = df_prices.loc[str(start_date):str(end_date)]
-    df_returns = np.log(df_filtered_prices / df_filtered_prices.shift(1)).dropna()
 
+    # Chỉ giữ lại các cột thực sự là kiểu số (float/int) để tính toán
+    df_filtered_prices = df_filtered_prices.select_dtypes(include=[np.number])
+
+    # Tính toán tỷ suất sinh lợi Logarit hằng ngày từ dữ liệu đã lọc
+    df_returns = np.log(df_filtered_prices / df_filtered_prices.shift(1)).dropna()
     # 3. TOÁN PCA FROM SCRATCH 
     stocks_returns = df_returns.drop(columns=['VN30'], errors='ignore')
     X = stocks_returns.values
