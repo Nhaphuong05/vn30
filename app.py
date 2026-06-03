@@ -95,8 +95,20 @@ def load_raw_data(folder):
         df_merged = df_merged.ffill().bfill()
         
     return df_merged
+
 # Tải dữ liệu thô
 df_prices = load_raw_data(DATA_FOLDER)
+
+# --- ĐOẠN CODE KIỂM TRA LỖI TRỰC TIẾP (BỎ SAU KHI SỬA XONG) ---
+st.write("### 🔍 KIỂM TRA HỆ THỐNG TRÊN WEB:")
+if df_prices is None:
+    st.error("Trạng thái: Không tìm thấy thư mục hoặc thư mục trống không!")
+else:
+    st.success(f"Trạng thái: Đọc được file thành công! Số dòng thô: {len(df_prices)}, Số cột: {len(df_prices.columns)}")
+    st.write("Danh sách cột đọc được từ file:", list(df_prices.columns))
+    st.write("Kiểu dữ liệu của Index Ngày Tháng:", type(df_prices.index))
+    st.write("Ngày bắt đầu thô:", df_prices.index.min(), " | Ngày kết thúc thô:", df_prices.index.max())
+# -------------------------------------------------------------
 
 if df_prices is None:
     st.error(f"⚠️ Không tìm thấy dữ liệu CSV tại thư mục: '{DATA_FOLDER}'. Hãy đảm bảo thư mục này nằm ngang hàng với file app.py.")
@@ -120,7 +132,7 @@ else:
     t_start = pd.Timestamp(start_date)
     t_end = pd.Timestamp(end_date)
     df_filtered_prices = df_prices.loc[t_start:t_end]
-    
+
     # Chỉ giữ lại các cột thực sự là kiểu số (float/int) để tính toán
     df_filtered_prices = df_filtered_prices.select_dtypes(include=[np.number])
 
