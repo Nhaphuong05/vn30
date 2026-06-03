@@ -34,11 +34,19 @@ st.sidebar.markdown("- **Nguyễn Thị Nhã Phương**")
 DATA_FOLDER = "VN30"
 
 def clean_ticker_name(filename):
-    filename_normalized = unicodedata.normalize('NFC', filename)
-    ticker = filename_normalized.replace("Dữ liệu Lịch sử ", "").replace(".csv", "").replace(" ", "")
-    return ticker
+    # Loại bỏ đuôi .csv và khoảng trắng thừa hai đầu
+    name_without_ext = filename.replace(".csv", "").strip()
+    
+    # Tách các từ trong tên file ra dựa vào khoảng trắng
+    words = name_without_ext.split()
+    
+    if words:
+        # Lấy từ cuối cùng trong tên file (chính là mã cổ phiếu như FPT, VCB, VN30...)
+        ticker = words[-1].strip()
+        return ticker
+    return name_without_ext
 
-@st.cache_data
+@st.cache_data(ttl=60)
 def load_raw_data(folder):
     file_list = glob.glob(os.path.join(folder, "*.csv"))
     if not file_list:
@@ -108,9 +116,11 @@ else:
     steps_qr = st.sidebar.slider("Số vòng lặp thuật toán QR", 100, 1500, 500, step=100)
     target_var = st.sidebar.slider("Ngưỡng phương sai giải thích tích lũy (%)", 50, 95, 90, step=5) / 100.0
 
-    # Lọc dữ liệu theo ngày đã chọn
-    df_filtered_prices = df_prices.loc[str(start_date):str(end_date)]
-
+    # SỬA CHỖ NÀY: Ép biến ngày từ Sidebar về chuẩn Timestamp để Linux lọc không bị rỗng
+    t_start = pd.Timestamp(start_date)
+    t_end = pd.Timestamp(end_date)
+    df_filtered_prices = df_prices.loc[t_start:t_end]
+    
     # Chỉ giữ lại các cột thực sự là kiểu số (float/int) để tính toán
     df_filtered_prices = df_filtered_prices.select_dtypes(include=[np.number])
 
