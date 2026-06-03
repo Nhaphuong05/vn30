@@ -14,12 +14,14 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Khởi tạo CSS customized để làm mượt giao diện
+# Khởi tạo CSS customized để làm mượt giao diện và sửa lỗi chìm chữ trên Cloud
 st.markdown("""
     <style>
     .main-title { font-size:32px !important; font-weight: 700; color: #1E3A8A; text-align: center; margin-bottom: 5px; }
     .sub-title { font-size:18px !important; text-align: center; color: #4B5563; margin-bottom: 20px; }
-    .card { background-color: #F3F4F6; padding: 15px; border-radius: 10px; margin-bottom: 15px; border-left: 5px solid #1E3A8A; color: #1F2937; }
+    .card { background-color: #F8FAFC; padding: 20px; border-radius: 12px; margin-bottom: 15px; border-left: 6px solid #1E3A8A; color: #0F172A; box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1); }
+    /* Đảm bảo chữ trên các Tab luôn hiển thị rõ ràng */
+    .stTabs button { color: inherit !important; font-weight: 600 !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -52,11 +54,11 @@ def load_raw_data(folder):
         df_temp.columns = ['Date', ticker]
         df_temp['Date'] = pd.to_datetime(df_temp['Date'], format='%d/%m/%Y')
         
-        # CHỖ SỬA QUAN TRỌNG: Làm sạch và ép kiểu số tuyệt đối cho cột giá
+        # Làm sạch và ép kiểu số tuyệt đối cho cột giá
         if df_temp[ticker].dtype == 'object':
             df_temp[ticker] = df_temp[ticker].astype(str).str.replace(',', '')
-            df_temp[ticker] = df_temp[ticker].str.replace('%', '') # Xóa dấu % nếu có
-            df_temp[ticker] = df_temp[ticker].str.strip() # Xóa khoảng trắng thừa
+            df_temp[ticker] = df_temp[ticker].str.replace('%', '') 
+            df_temp[ticker] = df_temp[ticker].str.strip() 
             
         # Ép buộc chuyển sang dạng số, nếu có dòng lỗi chữ thì biến thành NaN
         df_temp[ticker] = pd.to_numeric(df_temp[ticker], errors='coerce')
@@ -74,6 +76,7 @@ def load_raw_data(folder):
         df_merged = df_merged.ffill().bfill()
         
     return df_merged
+
 # Tải dữ liệu thô
 df_prices = load_raw_data(DATA_FOLDER)
 
@@ -95,7 +98,7 @@ else:
     steps_qr = st.sidebar.slider("Số vòng lặp thuật toán QR", 100, 1500, 500, step=100)
     target_var = st.sidebar.slider("Ngưỡng phương sai giải thích tích lũy (%)", 50, 95, 90, step=5) / 100.0
 
-   # Lọc dữ liệu theo ngày đã chọn
+    # Lọc dữ liệu theo ngày đã chọn
     df_filtered_prices = df_prices.loc[str(start_date):str(end_date)]
 
     # Chỉ giữ lại các cột thực sự là kiểu số (float/int) để tính toán
@@ -103,6 +106,7 @@ else:
 
     # Tính toán tỷ suất sinh lợi Logarit hằng ngày từ dữ liệu đã lọc
     df_returns = np.log(df_filtered_prices / df_filtered_prices.shift(1)).dropna()
+    
     # 3. TOÁN PCA FROM SCRATCH 
     stocks_returns = df_returns.drop(columns=['VN30'], errors='ignore')
     X = stocks_returns.values
@@ -157,7 +161,6 @@ else:
         st.markdown("### 🧮 Ma trận Tương quan Tỷ suất sinh lợi (Interactive Heatmap)")
         corr_matrix = stocks_returns.corr()
         
-        # FIX: Dùng trực tiếp mảng Hex màu cố định để triệt tiêu lỗi hệ thống chuỗi tên màu
         fig_heat = px.imshow(
             corr_matrix,
             text_auto='.2f',
@@ -165,7 +168,12 @@ else:
             color_continuous_scale=DIVERGING_HEX_SCALE, 
             labels=dict(color="Hệ số tương quan")
         )
-        fig_heat.update_layout(height=700, margin=dict(l=20, r=20, t=20, b=20))
+        # CHỖ NÀY: Đảm bảo thụt lề bằng đúng với dòng fig_heat phía trên
+        fig_heat.update_layout(
+            height=700, 
+            margin=dict(l=20, r=20, t=20, b=20),
+            template="plotly_white" 
+        )
         st.plotly_chart(fig_heat, use_container_width=True)
 
     with tab3:
@@ -205,7 +213,8 @@ else:
             fig_scree.update_layout(
                 xaxis_title="Số lượng Thành phần chính (PCs)",
                 yaxis_title="Tỷ lệ phương sai tích lũy (%)",
-                margin=dict(l=20, r=20, t=20, b=20), height=400
+                margin=dict(l=20, r=20, t=20, b=20), height=400,
+                template="plotly_white"
             )
             st.plotly_chart(fig_scree, use_container_width=True)
 
@@ -254,8 +263,10 @@ else:
         
         fig_line.update_layout(
             title="Đồ thị lũy kế đa nhân tố: VN30 Index vs PC1 vs PC2",
-            xaxis_title="Thời gian", yaxis_title="Tỷ suất sinh lợi tích lũy",
-            hovermode="x unified", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)"
+            xaxis_title="Thời gian", 
+            yaxis_title="Tỷ suất sinh lợi tích lũy",
+            hovermode="x unified", 
+            template="plotly_white" 
         )
         st.plotly_chart(fig_line, use_container_width=True)
         
@@ -276,7 +287,6 @@ else:
             "Trọng số Loading": pc2_eigenvector
         }).sort_values(by="Trọng số Loading", key=abs, ascending=False)
         
-        # FIX: Ép bảng màu biểu đồ cột sang mảng Hex cố định để triệt tiêu lỗi
         fig_bar_pc2 = px.bar(
             df_loadings_pc2,
             x="Mã Cổ Phiếu", y="Trọng số Loading",
@@ -285,11 +295,10 @@ else:
             title="Sức ảnh hưởng phân hóa dòng tiền của các cổ phiếu cấu thành PC2"
         )
         fig_bar_pc2.update_layout(
-            plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+            template="plotly_white", 
             xaxis={'categoryorder':'total descending'}
         )
         st.plotly_chart(fig_bar_pc2, use_container_width=True)
-        
         
         # Khối kết luận biện luận mở rộng tích hợp PC1 & PC2 (Bản nâng cấp thực tế cho HUB)
         st.markdown("""
@@ -308,6 +317,7 @@ else:
         Nhìn vào đường đồ thị PC2, giai đoạn giữa năm 2025 nó cắm đầu đi xuống vì dòng tiền lúc đó chê nhóm bất động sản và bank tư nhân để chạy sang trú ẩn ở nhóm năng lượng, sản xuất (Phía Dương thắng thế). Ngược lại, từ cuối năm 2025 đến đầu năm 2026, đường PC2 lại dựng đứng lên. Điều này chứng minh dòng tiền đầu cơ đã quay xe, rút mạnh khỏi nhóm phòng thủ để lao vào đánh sóng hồi của bất động sản và tài chính tư nhân (Phía Âm bùng nổ). Bản chất của PC2 chính là thước đo xem dòng tiền thông minh đang chảy vào túi ngành nào.</p>
         
         <p><strong>3. Ứng dụng thực tế để thiết kế danh mục đầu tư</strong><br>
-        Từ thuật toán PCA tự dựng này, chúng ta rút ra một mẹo xương máu khi làm danh mục đầu tư: Đừng bao giờ mua hai cổ phiếu nằm cùng một phía của PC2 (ví dụ đã mua <code>VHM</code> lại còn mua thêm <code>TCB</code>, hoặc đã ôm <code>GAS</code> lại mua thêm <code>PLX</code>). Vì khi dòng tiền rút khỏi nhóm đó, danh mục của bạn sẽ bị vạ lây cả đôi. Cách đi tiền khôn ngoan là bắt cặp chéo giữa một mã phía Dương (như <code>VCB</code> hoặc <code>GAS</code>) với một mã phía Âm (như <code>TCB</code> hoặc <code>VHM</code>). Sự bù trừ này giúp danh mục luôn có chỗ dựa vững chắc bất kể dòng tiền thị trường có xoay vòng thế nào đi chăng nữa.</p>
+        Từ thuật toán PCA tự dựng này, chúng ta rút ra một mẹo xương máu khi làm danh mục đầu tư: Đừng bao giờ mua hai cổ phiếu nằm cùng một phía của PC2 (ví dụ đã mua <code>VHM</code> lại còn mua thêm <code>TCB</code>, hoặc đã ôm <code>GAS</code> lại mua thêm <code>PLX</code>). Vì khi dòng tiền rút khỏi nhóm đó, danh mục của bạn sẽ bị vạ lây cả đôi. Cách đi tiền khôn ngoan là bắt cặp chéo giữa một mã phía Dương (như <code>VCB</code> hoặc <code>GAS</code>) with một mã phía Âm (như <code>TCB</code> hoặc <code>VHM</code>). Sự bù trừ này giúp danh mục luôn có chỗ dựa vững chắc bất kể dòng tiền thị trường có xoay vòng thế nào đi chăng nữa.</p>
         </div>
         """, unsafe_allow_html=True)
+        
