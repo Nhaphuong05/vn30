@@ -62,25 +62,39 @@ def load_raw_data(folder):
         filename = os.path.basename(file_path)
         ticker = clean_ticker_name(filename)
         
-        # Đọc file bằng encoding an toàn để tránh lỗi font trên Linux
+        # 1. Đọc file bằng encoding an toàn
         try:
             df_raw = pd.read_csv(file_path, encoding='utf-8')
-            if df_raw.shape[1] < 2:
-                raise ValueError
         except:
-            try:
-                df_raw = pd.read_csv(file_path, encoding='utf-8-sig')
-            except:
-                df_raw = pd.read_csv(file_path, encoding='latin1')
+            df_raw = pd.read_csv(file_path, encoding='utf-8-sig')
             
-        # Lấy theo vị trí cột (Cột 0 là Ngày, Cột 1 là Giá)
-        df_temp = df_raw.iloc[:, [0, 1]].copy()
+        # 2. Tự động dò tìm cột Ngày và cột Giá (bỏ qua cột Thay đổi %, Khối lượng)
+        col_names = [str(c).strip() for c in df_raw.columns]
+        
+        # Cột ngày luôn ở vị trí đầu tiên (Index 0)
+        date_col = df_raw.columns[0]
+        
+        # Tìm cột giá: Quét xem cột nào chứa chữ 'lần cuối', 'giá', 'close', 'price'
+        price_col = None
+        for original_col in df_raw.columns:
+            col_lower = str(original_col).lower()
+            # Ưu tiên lấy cột giá đóng cửa, loại trừ các cột biến động % hoặc khối lượng K, M
+            if any(k in col_lower for k in ['lần cuối', 'giá', 'close', 'price', 'last']) and not any(x in col_lower for x in ['%', 'thay đổi', 'chg', 'vol', 'khối lượng']):
+                price_col = original_col
+                break
+                
+        # Nếu không dò ra từ khóa, lấy đại diện cột vị trí số 1 làm phương án dự phòng
+        if price_col == date_col or price_col is None:
+            price_col = df_raw.columns[1]
+            
+        # Trích xuất dữ liệu chuẩn
+        df_temp = df_raw[[date_col, price_col]].copy()
         df_temp.columns = ['Date', ticker]
         
         # Ép định dạng ngày chuẩn xác %d/%m/%Y
         df_temp['Date'] = pd.to_datetime(df_temp['Date'], format='%d/%m/%Y', errors='coerce')
         
-        # Làm sạch giá tiền
+        # Làm sạch giá tiền (Xóa bỏ dấu phẩy phân cách hàng nghìn nếu có)
         if df_temp[ticker].dtype == 'object':
             df_temp[ticker] = df_temp[ticker].astype(str).str.replace(',', '', regex=False)
             df_temp[ticker] = df_temp[ticker].str.replace('%', '', regex=False) 
