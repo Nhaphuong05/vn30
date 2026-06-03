@@ -49,18 +49,20 @@ def load_raw_data(folder):
         filename = os.path.basename(file_path)
         ticker = clean_ticker_name(filename)
         
-        # Đọc dữ liệu, ép cột Ngày về datetime luôn
+        # Đọc dữ liệu gốc
         df_temp = pd.read_csv(file_path)[['Ngày', 'Lần cuối']].copy()
         df_temp.columns = ['Date', ticker]
-        df_temp['Date'] = pd.to_datetime(df_temp['Date'], format='%d/%m/%Y')
         
-        # Làm sạch và ép kiểu số tuyệt đối cho cột giá
+        # SỬA CHÍNH XÁC Ở ĐÂY: Khóa chặt định dạng Ngày/Tháng/Năm ( %d/%m/%Y )
+        # Nếu file CSV của bạn lưu dạng 29/04/2025 thì format này sẽ ép cả Local và Web đều phải hiểu đúng 100%
+        df_temp['Date'] = pd.to_datetime(df_temp['Date'], format='%d/%m/%Y', errors='coerce')
+        
+        # Làm sạch giá tiền
         if df_temp[ticker].dtype == 'object':
             df_temp[ticker] = df_temp[ticker].astype(str).str.replace(',', '')
             df_temp[ticker] = df_temp[ticker].str.replace('%', '') 
             df_temp[ticker] = df_temp[ticker].str.strip() 
             
-        # Ép buộc chuyển sang dạng số, nếu có dòng lỗi chữ thì biến thành NaN
         df_temp[ticker] = pd.to_numeric(df_temp[ticker], errors='coerce')
             
         if df_merged is None:
@@ -69,14 +71,17 @@ def load_raw_data(folder):
             df_merged = pd.merge(df_merged, df_temp, on='Date', how='outer')
             
     if df_merged is not None:
+        # Loại bỏ các dòng lỗi ngày nếu có
+        df_merged = df_merged.dropna(subset=['Date'])
         df_merged = df_merged.sort_values('Date').set_index('Date')
-        # Ép kiểu float cho toàn bộ dataframe để tránh lỗi PyArrow trên Cloud
+        
+        # Đảm bảo index ngày tháng không bị dính múi giờ tự động
+        df_merged.index = pd.to_datetime(df_merged.index).tz_localize(None)
+        
         df_merged = df_merged.astype(float)
-        # Điền dữ liệu trống bằng phương pháp ffill/bfill
         df_merged = df_merged.ffill().bfill()
         
     return df_merged
-
 # Tải dữ liệu thô
 df_prices = load_raw_data(DATA_FOLDER)
 
@@ -320,4 +325,4 @@ else:
         Từ thuật toán PCA tự dựng này, chúng ta rút ra một mẹo xương máu khi làm danh mục đầu tư: Đừng bao giờ mua hai cổ phiếu nằm cùng một phía của PC2 (ví dụ đã mua <code>VHM</code> lại còn mua thêm <code>TCB</code>, hoặc đã ôm <code>GAS</code> lại mua thêm <code>PLX</code>). Vì khi dòng tiền rút khỏi nhóm đó, danh mục của bạn sẽ bị vạ lây cả đôi. Cách đi tiền khôn ngoan là bắt cặp chéo giữa một mã phía Dương (như <code>VCB</code> hoặc <code>GAS</code>) with một mã phía Âm (như <code>TCB</code> hoặc <code>VHM</code>). Sự bù trừ này giúp danh mục luôn có chỗ dựa vững chắc bất kể dòng tiền thị trường có xoay vòng thế nào đi chăng nữa.</p>
         </div>
         """, unsafe_allow_html=True)
-        
+    
